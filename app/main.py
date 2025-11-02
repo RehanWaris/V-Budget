@@ -274,6 +274,13 @@ def list_budgets(
 ):
     """Return budgets visible to the current user."""
 
+    query = db.query(Budget)
+    if current_user.role != UserRole.admin:
+        query = query.filter(Budget.owner_id == current_user.id)
+
+    if status_filter is not None:
+        query = query.filter(Budget.status == status_filter)
+
     def _scoped_query() -> "Query[Budget]":
         base_query = db.query(Budget)
         if current_user.role != UserRole.admin:
