@@ -51,6 +51,7 @@ app/
 4. **Launch the API server**
    ```bash
    python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   uvicorn app.main:app --reload --port 8000
    ```
 
 5. **Open the interactive docs**

@@ -10,6 +10,12 @@ from jose import JWTError, jwt
 
 from .config import get_settings
 
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+
+from .config import get_settings
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
 
 
@@ -54,3 +60,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def needs_rehash(hashed_password: str) -> bool:
     """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
     return hashed_password.startswith("$2")
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
