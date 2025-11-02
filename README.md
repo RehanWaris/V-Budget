@@ -80,6 +80,11 @@ Follow these exact clicks the first time you sign in:
 > - Double-check the email/password pair in step 1. The admin account is seeded with `rehan@voiceworx.in` / `Admin@123` whenever the app starts on a fresh database.
 > - If you previously changed the admin password and forgot it, stop the server, delete `vbudget.db`, and restart; a new admin account will be created.
 > - New employees must complete both OTP steps (`/auth/verify-self` and `/auth/admin-approve`) before they can log in.
+   uvicorn app.main:app --reload --port 8000
+   ```
+
+5. **Open the interactive docs**
+   Visit [http://localhost:8000/docs](http://localhost:8000/docs) to explore and test endpoints.
 
 ### Running inside GitHub Codespaces
 
