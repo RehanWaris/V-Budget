@@ -50,25 +50,11 @@ app/
 
 4. **Launch the API server**
    ```bash
-   python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   uvicorn app.main:app --reload --port 8000
    ```
 
 5. **Open the interactive docs**
    Visit [http://localhost:8000/docs](http://localhost:8000/docs) to explore and test endpoints.
-
-### Running inside GitHub Codespaces
-
-Codespaces exposes forwarded ports rather than `localhost`. After starting the
-server with the command above, open the **Ports** tab in the Codespaces UI and
-locate port `8000`. Choose **Open in Browser** (or copy the provided HTTPS
-URL). Append `/docs` to that URL to view the interactive Swagger UI. This is
-equivalent to visiting `http://localhost:8000/docs` on a local machine.
-
-> **Tip:** Every new terminal session starts without the virtual environment
-> activated. Run `source .venv/bin/activate` (or the Windows equivalent) before
-> launching the server so the `uvicorn` package from `requirements.txt` is
-> available. If you ever see `uvicorn: command not found`, re-activate the
-> environment or reinstall the dependencies with `pip install -r requirements.txt`.
 
 ## First-Time Admin Login
 
