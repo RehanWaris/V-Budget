@@ -25,6 +25,7 @@ from .schemas import (
     VendorCreateRequest,
     VendorResponse,
 )
+from .security import create_access_token, get_password_hash, needs_rehash, verify_password
 from .security import create_access_token, verify_password
 from .services import (
     admin_approve_user,
@@ -84,6 +85,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     if user.status != UserStatus.active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not active")
+
+    if needs_rehash(user.hashed_password):
+        user.hashed_password = get_password_hash(form_data.password)
+        db.commit()
+        db.refresh(user)
     access_token = create_access_token(user.email, expires_delta=timedelta(minutes=settings.access_token_expire_minutes))
     return Token(access_token=access_token)
 
