@@ -1,5 +1,6 @@
 from datetime import timedelta
 from typing import List, Optional
+from typing import List
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +24,7 @@ from .models import (
     Vendor,
     VendorStatus,
 )
+from .models import Approval, ApprovalStage, Budget, BudgetStatus, User, UserRole, UserStatus, Vendor, VendorStatus
 from .schemas import (
     AdminOTPRequest,
     ApprovalAction,
@@ -39,6 +41,7 @@ from .schemas import (
     VendorResponse,
 )
 from .security import create_access_token, get_password_hash, needs_rehash, verify_password
+from .security import create_access_token, verify_password
 from .services import (
     admin_approve_user,
     attach_budget_document,
@@ -213,6 +216,8 @@ def create_vendor_endpoint(
 def list_vendors(
     status_filter: Optional[VendorStatus] = None,
     category: Optional[str] = None,
+    status_filter: VendorStatus | None = None,
+    category: str | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -276,6 +281,20 @@ def list_budgets(
     if status_filter is not None:
         query = query.filter(Budget.status == status_filter)
 
+    def _scoped_query() -> "Query[Budget]":
+        base_query = db.query(Budget)
+        if current_user.role != UserRole.admin:
+            return base_query.filter(Budget.owner_id == current_user.id)
+        return base_query
+
+    query = _scoped_query()
+    if status_filter is not None:
+def list_budgets(status_filter: BudgetStatus | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = db.query(Budget)
+    if current_user.role != UserRole.admin:
+        query = query.filter(Budget.owner_id == current_user.id)
+    if status_filter:
+        query = query.filter(Budget.status == status_filter)
     return query.order_by(Budget.updated_at.desc()).all()
 
 
