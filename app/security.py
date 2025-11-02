@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Optional, Union
 from typing import Optional
 
 import base64
@@ -40,6 +41,7 @@ def get_password_hash(password: str) -> str:
     return base64.b64encode(salt + derived).decode("utf-8")
 
 
+def _normalize_hash(hashed_password: Union[str, bytes, None]) -> Optional[str]:
 def _normalize_hash(hashed_password: str | bytes | None) -> str | None:
     """Ensure stored password hashes are treated as UTF-8 strings."""
     if hashed_password is None:
@@ -53,6 +55,9 @@ def _normalize_hash(hashed_password: str | bytes | None) -> str | None:
             return None
     # Unexpected types (bool, memoryview, etc.) can't be interpreted as hashes
     return None
+
+
+def verify_password(plain_password: str, hashed_password: Union[str, bytes, None]) -> bool:
     return hashed_password
 
 
@@ -94,6 +99,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
+def needs_rehash(hashed_password: Union[str, bytes, None]) -> bool:
+    """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
+    normalized = _normalize_hash(hashed_password)
+    return bool(isinstance(normalized, str) and normalized.startswith("$2"))
 def needs_rehash(hashed_password: str | bytes | None) -> bool:
     """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
     normalized = _normalize_hash(hashed_password)

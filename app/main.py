@@ -214,6 +214,8 @@ def create_vendor_endpoint(
 
 @app.get("/vendors", response_model=List[VendorResponse])
 def list_vendors(
+    status_filter: Optional[VendorStatus] = None,
+    category: Optional[str] = None,
     status_filter: VendorStatus | None = None,
     category: str | None = None,
     db: Session = Depends(get_db),
@@ -265,6 +267,11 @@ def submit_budget(budget_id: int, current_user: User = Depends(get_current_user)
 
 
 @app.get("/budgets", response_model=List[BudgetResponse])
+def list_budgets(
+    status_filter: Optional[BudgetStatus] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
 def list_budgets(status_filter: BudgetStatus | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = db.query(Budget)
     if current_user.role != UserRole.admin:
