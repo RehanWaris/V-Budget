@@ -142,6 +142,19 @@ equivalent to visiting `http://localhost:8000/docs` on a local machine.
 > available. If you ever see `uvicorn: command not found`, re-activate the
 > environment or reinstall the dependencies with `pip install -r requirements.txt`.
 
+> **Troubleshooting an `IndentationError` during startup:** Codespaces can keep
+> bytecode from older commits if the workspace was opened before pulling the
+> latest changes. If Uvicorn crashes with `IndentationError: expected an
+> indented block after function definition`, force-refresh your checkout:
+>
+> ```bash
+> git fetch origin
+> git reset --hard origin/work
+> ```
+>
+> Afterwards reinstall dependencies if prompted and restart the server with
+> `python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`.
+
 ## First-Time Admin Login
 
 On the first run the system seeds an admin account:
