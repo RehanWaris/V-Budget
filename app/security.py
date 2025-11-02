@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional, Union
+from typing import Optional
 
 import base64
 import hashlib
@@ -10,6 +11,12 @@ from jose import JWTError, jwt
 
 from .config import get_settings
 
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+
+from .config import get_settings
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
 
 
@@ -35,6 +42,7 @@ def get_password_hash(password: str) -> str:
 
 
 def _normalize_hash(hashed_password: Union[str, bytes, None]) -> Optional[str]:
+def _normalize_hash(hashed_password: str | bytes | None) -> str | None:
     """Ensure stored password hashes are treated as UTF-8 strings."""
     if hashed_password is None:
         return None
@@ -50,6 +58,10 @@ def _normalize_hash(hashed_password: Union[str, bytes, None]) -> Optional[str]:
 
 
 def verify_password(plain_password: str, hashed_password: Union[str, bytes, None]) -> bool:
+    return hashed_password
+
+
+def verify_password(plain_password: str, hashed_password: str | bytes | None) -> bool:
     """Verify a password that may be stored as PBKDF2 (new) or bcrypt (legacy)."""
     normalized = _normalize_hash(hashed_password)
     if not normalized:
@@ -66,6 +78,20 @@ def verify_password(plain_password: str, hashed_password: Union[str, bytes, None
 
     try:
         decoded = base64.b64decode(normalized.encode("utf-8"), validate=True)
+    if normalized.startswith("$2"):
+        try:
+            return bcrypt.checkpw(plain_password.encode("utf-8"), normalized.encode("utf-8"))
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password that may be stored as PBKDF2 (new) or bcrypt (legacy)."""
+    if hashed_password.startswith("$2"):
+        try:
+            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+        except ValueError:
+            return False
+
+    try:
+        decoded = base64.b64decode(normalized.encode("utf-8"), validate=True)
+        decoded = base64.b64decode(hashed_password.encode("utf-8"), validate=True)
         salt, stored_hash = decoded[:16], decoded[16:]
         candidate = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, 100_000)
         return secrets.compare_digest(candidate, stored_hash)
@@ -77,3 +103,16 @@ def needs_rehash(hashed_password: Union[str, bytes, None]) -> bool:
     """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
     normalized = _normalize_hash(hashed_password)
     return bool(isinstance(normalized, str) and normalized.startswith("$2"))
+def needs_rehash(hashed_password: str | bytes | None) -> bool:
+    """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
+    normalized = _normalize_hash(hashed_password)
+    return bool(isinstance(normalized, str) and normalized.startswith("$2"))
+    return bool(normalized and normalized.startswith("$2"))
+def needs_rehash(hashed_password: str) -> bool:
+    """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
+    return hashed_password.startswith("$2")
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
