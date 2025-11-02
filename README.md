@@ -62,6 +62,9 @@ automation script. Hit <kbd>Ctrl+C</kbd> to stop the server.
    ```
 
 3. **Launch the API server**
+3. **Run database migrations** (tables auto-create on first start)
+
+4. **Launch the API server**
    ```bash
    python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
@@ -92,6 +95,9 @@ The script registers a demo employee, fetches OTPs from `/debug/otps`, completes
 admin approval, logs in as the employee, and creates a sample vendor – mirroring
 the manual instructions in Swagger.
 
+5. **Open the interactive docs**
+   Visit [http://localhost:8000/docs](http://localhost:8000/docs) (or the forwarded Codespaces URL) to explore and test endpoints.
+
 ### Quick walkthrough in Swagger UI
 
 Follow these exact clicks the first time you sign in:
@@ -116,6 +122,11 @@ Follow these exact clicks the first time you sign in:
 > - Double-check the email/password pair in step 1. The admin account is seeded with `rehan@voiceworx.in` / `Admin@123` whenever the app starts on a fresh database.
 > - If you previously changed the admin password and forgot it, stop the server, delete `vbudget.db`, and restart; a new admin account will be created.
 > - New employees must complete both OTP steps (`/auth/verify-self` and `/auth/admin-approve`) before they can log in.
+   uvicorn app.main:app --reload --port 8000
+   ```
+
+5. **Open the interactive docs**
+   Visit [http://localhost:8000/docs](http://localhost:8000/docs) to explore and test endpoints.
 
 ### Running inside GitHub Codespaces
 
