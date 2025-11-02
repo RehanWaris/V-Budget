@@ -1,14 +1,29 @@
 from datetime import timedelta
+from typing import List, Optional
 from typing import List
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .database import Base, engine, get_db
 from .deps import get_current_user, require_role
+from .models import (
+    Approval,
+    ApprovalStage,
+    Budget,
+    BudgetStatus,
+    OneTimePassword,
+    OTPPurpose,
+    User,
+    UserRole,
+    UserStatus,
+    Vendor,
+    VendorStatus,
+)
 from .models import Approval, ApprovalStage, Budget, BudgetStatus, User, UserRole, UserStatus, Vendor, VendorStatus
 from .schemas import (
     AdminOTPRequest,
@@ -60,6 +75,53 @@ def startup_event() -> None:
         seed_admin(db, settings.admin_email)
 
 
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def landing_page() -> str:
+    docs_url = "/docs"
+    debug_section = ""
+    if settings.debug_mode:
+        debug_section = """
+            <li>
+              Visit <code>/debug/otps</code> to see OTP codes generated for demo purposes.
+              Filter them by adding <code>?email=&lt;your email&gt;</code> or
+              <code>?purpose=self_registration</code> to the URL.
+            </li>
+        """
+
+    return f"""
+    <!doctype html>
+    <html lang=\"en\">
+      <head>
+        <meta charset=\"utf-8\" />
+        <title>V-Budget API</title>
+        <style>
+          body {{ font-family: Arial, sans-serif; margin: 2rem; line-height: 1.6; color: #1f2933; }}
+          code {{ background: #f1f5f9; padding: 0.15rem 0.35rem; border-radius: 4px; }}
+          ol {{ max-width: 720px; }}
+          .note {{ background: #ecfeff; border-left: 4px solid #0891b2; padding: 1rem; margin-top: 1.5rem; border-radius: 4px; }}
+        </style>
+      </head>
+      <body>
+        <h1>V-Budget API is running</h1>
+        <p>The interactive documentation lives at <a href=\"{docs_url}\">{docs_url}</a>.</p>
+        <h2>Quick start</h2>
+        <ol>
+          <li>Open the <a href=\"{docs_url}\">Swagger UI</a> and expand <strong>POST /auth/login</strong>.</li>
+          <li>Sign in with the seeded admin account <code>rehan@voiceworx.in</code> / <code>Admin@123</code> and click the green <strong>Authorize</strong> button.</li>
+          <li>Create additional employees with <strong>POST /auth/register</strong> and activate them using the OTP endpoints.</li>
+          <li>Once an employee is active, explore vendor and budget endpoints to build costing sheets.</li>
+          {debug_section}
+        </ol>
+        <div class=\"note\">
+          <strong>Need automation?</strong> Run <code>scripts/run_api.sh</code> from the repository root to install
+          dependencies and launch the server in one step. Use the sample workflow under <code>samples/node-workflow</code>
+          for an end-to-end demonstration of registration, approval, and vendor creation.
+        </div>
+      </body>
+    </html>
+    """
+
+
 @app.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(user: UserCreate, db: Session = Depends(get_db)):
     new_user = register_user(db, user.model_dump())
@@ -102,6 +164,35 @@ def get_me(current_user: User = Depends(get_current_user)):
 @app.get("/users/pending", response_model=List[UserResponse])
 def pending_users(db: Session = Depends(get_db), _: User = Depends(require_role(UserRole.admin, UserRole.approver))):
     return db.query(User).filter(User.status == UserStatus.pending_admin_approval).all()
+
+
+@app.get("/debug/otps")
+def list_debug_otps(
+    email: Optional[str] = None,
+    purpose: Optional[OTPPurpose] = None,
+    db: Session = Depends(get_db),
+):
+    if not settings.debug_mode:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    query = db.query(OneTimePassword).filter(OneTimePassword.consumed.is_(False))
+    if email:
+        query = query.join(User).filter(User.email == email)
+    if purpose:
+        query = query.filter(OneTimePassword.purpose == purpose)
+
+    otps = query.order_by(OneTimePassword.created_at.desc()).all()
+    return [
+        {
+            "user_id": otp.user_id,
+            "email": otp.user.email if otp.user else None,
+            "purpose": otp.purpose.value,
+            "code": otp.code,
+            "expires_at": otp.expires_at.isoformat(),
+            "created_at": otp.created_at.isoformat(),
+        }
+        for otp in otps
+    ]
 
 
 @app.post("/vendors/request-otp", response_model=Message)

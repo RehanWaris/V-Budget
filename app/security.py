@@ -44,11 +44,15 @@ def _normalize_hash(hashed_password: str | bytes | None) -> str | None:
     """Ensure stored password hashes are treated as UTF-8 strings."""
     if hashed_password is None:
         return None
+    if isinstance(hashed_password, str):
+        return hashed_password
     if isinstance(hashed_password, bytes):
         try:
             return hashed_password.decode("utf-8")
         except UnicodeDecodeError:
             return None
+    # Unexpected types (bool, memoryview, etc.) can't be interpreted as hashes
+    return None
     return hashed_password
 
 
@@ -58,6 +62,17 @@ def verify_password(plain_password: str, hashed_password: str | bytes | None) ->
     if not normalized:
         return False
 
+    if isinstance(normalized, str) and normalized.startswith("$2"):
+        try:
+            return bcrypt.checkpw(plain_password.encode("utf-8"), normalized.encode("utf-8"))
+        except ValueError:
+            return False
+
+    if not isinstance(normalized, str):
+        return False
+
+    try:
+        decoded = base64.b64decode(normalized.encode("utf-8"), validate=True)
     if normalized.startswith("$2"):
         try:
             return bcrypt.checkpw(plain_password.encode("utf-8"), normalized.encode("utf-8"))
@@ -82,6 +97,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def needs_rehash(hashed_password: str | bytes | None) -> bool:
     """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
     normalized = _normalize_hash(hashed_password)
+    return bool(isinstance(normalized, str) and normalized.startswith("$2"))
     return bool(normalized and normalized.startswith("$2"))
 def needs_rehash(hashed_password: str) -> bool:
     """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""

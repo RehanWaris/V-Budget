@@ -35,6 +35,21 @@ app/
 
 ## Local Setup
 
+### One-command launch (recommended)
+
+Run the helper script – it creates the virtual environment, installs dependencies,
+and boots the server on port 8000:
+
+```bash
+./scripts/run_api.sh
+```
+
+Leave the script running. Open [http://localhost:8000](http://localhost:8000) to
+see the quick-start checklist with links to Swagger, the OTP viewer, and the
+automation script. Hit <kbd>Ctrl+C</kbd> to stop the server.
+
+### Manual steps
+
 1. **Create and activate a virtual environment**
    ```bash
    python3 -m venv .venv
@@ -46,12 +61,39 @@ app/
    pip install -r requirements.txt
    ```
 
+3. **Launch the API server**
 3. **Run database migrations** (tables auto-create on first start)
 
 4. **Launch the API server**
    ```bash
    python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
+
+4. **Open the interactive docs**
+   Visit [http://localhost:8000/docs](http://localhost:8000/docs) (or the forwarded Codespaces URL) to explore and test endpoints.
+
+### Built-in OTP viewer
+
+The root page links to `/debug/otps`, a development-only endpoint that lists all
+active OTPs. Filter them by email or purpose:
+
+```
+GET /debug/otps?email=user@example.com&purpose=vendor_unlock
+```
+
+Use these codes while stepping through Swagger or the automation script below.
+
+### Guided automation via Node.js
+
+Prefer a scripted walkthrough? With Node.js 18+ installed, run:
+
+```bash
+node samples/node-workflow/demo.mjs
+```
+
+The script registers a demo employee, fetches OTPs from `/debug/otps`, completes
+admin approval, logs in as the employee, and creates a sample vendor – mirroring
+the manual instructions in Swagger.
 
 5. **Open the interactive docs**
    Visit [http://localhost:8000/docs](http://localhost:8000/docs) (or the forwarded Codespaces URL) to explore and test endpoints.
