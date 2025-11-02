@@ -51,6 +51,35 @@ app/
 4. **Launch the API server**
    ```bash
    python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+5. **Open the interactive docs**
+   Visit [http://localhost:8000/docs](http://localhost:8000/docs) (or the forwarded Codespaces URL) to explore and test endpoints.
+
+### Quick walkthrough in Swagger UI
+
+Follow these exact clicks the first time you sign in:
+
+1. **Expand `POST /auth/login` and click `Try it out`.**
+   Fill the request body with either the seeded admin credentials or your own activated account:
+   ```json
+   {
+     "username": "rehan@voiceworx.in",
+     "password": "Admin@123"
+   }
+   ```
+   Hit **Execute**. A `200` response returns an `access_token`.
+2. **Copy the access token** (everything inside the quotes).
+3. **Click the green `Authorize` button** in the top-right corner of Swagger.
+   - Choose the only available scheme (`OAuth2PasswordBearer`).
+   - Paste the token into the `Value` field in the format `Bearer <token>` (include the word *Bearer*).
+   - Click **Authorize → Close**.
+4. The lock icons beside every secured endpoint turn closed. You can now call any API operation without re-entering credentials until the token expires (12 hours by default).
+
+> **Troubleshooting `401 Unauthorized`:**
+> - Double-check the email/password pair in step 1. The admin account is seeded with `rehan@voiceworx.in` / `Admin@123` whenever the app starts on a fresh database.
+> - If you previously changed the admin password and forgot it, stop the server, delete `vbudget.db`, and restart; a new admin account will be created.
+> - New employees must complete both OTP steps (`/auth/verify-self` and `/auth/admin-approve`) before they can log in.
    uvicorn app.main:app --reload --port 8000
    ```
 
