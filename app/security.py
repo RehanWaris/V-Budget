@@ -1,118 +1,50 @@
-from datetime import datetime, timedelta
-from typing import Optional, Union
+# app/security.py
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import base64
-import hashlib
-import secrets
-
-import bcrypt
 from jose import JWTError, jwt
-
-from .config import get_settings
-
-from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 from .config import get_settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
 
-
-def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = {"sub": subject}
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
-
-
-def verify_access_token(token: str) -> Optional[str]:
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        return payload.get("sub")
-    except JWTError:
-        return None
-
-
-def get_password_hash(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
-    return base64.b64encode(salt + derived).decode("utf-8")
-
-
-def _normalize_hash(hashed_password: Union[str, bytes, None]) -> Optional[str]:
-def _normalize_hash(hashed_password: str | bytes | None) -> str | None:
-    """Ensure stored password hashes are treated as UTF-8 strings."""
-    if hashed_password is None:
-        return None
-    if isinstance(hashed_password, str):
-        return hashed_password
-    if isinstance(hashed_password, bytes):
-        try:
-            return hashed_password.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
-    # Unexpected types (bool, memoryview, etc.) can't be interpreted as hashes
-    return None
-
-
-def verify_password(plain_password: str, hashed_password: Union[str, bytes, None]) -> bool:
-    return hashed_password
-
-
-def verify_password(plain_password: str, hashed_password: str | bytes | None) -> bool:
-    """Verify a password that may be stored as PBKDF2 (new) or bcrypt (legacy)."""
-    normalized = _normalize_hash(hashed_password)
-    if not normalized:
-        return False
-
-    if isinstance(normalized, str) and normalized.startswith("$2"):
-        try:
-            return bcrypt.checkpw(plain_password.encode("utf-8"), normalized.encode("utf-8"))
-        except ValueError:
-            return False
-
-    if not isinstance(normalized, str):
-        return False
-
-    try:
-        decoded = base64.b64decode(normalized.encode("utf-8"), validate=True)
-    if normalized.startswith("$2"):
-        try:
-            return bcrypt.checkpw(plain_password.encode("utf-8"), normalized.encode("utf-8"))
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password that may be stored as PBKDF2 (new) or bcrypt (legacy)."""
-    if hashed_password.startswith("$2"):
-        try:
-            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
-        except ValueError:
-            return False
-
-    try:
-        decoded = base64.b64decode(normalized.encode("utf-8"), validate=True)
-        decoded = base64.b64decode(hashed_password.encode("utf-8"), validate=True)
-        salt, stored_hash = decoded[:16], decoded[16:]
-        candidate = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, 100_000)
-        return secrets.compare_digest(candidate, stored_hash)
-    except (ValueError, TypeError):
-        return False
-
-
-def needs_rehash(hashed_password: Union[str, bytes, None]) -> bool:
-    """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
-    normalized = _normalize_hash(hashed_password)
-    return bool(isinstance(normalized, str) and normalized.startswith("$2"))
-def needs_rehash(hashed_password: str | bytes | None) -> bool:
-    """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
-    normalized = _normalize_hash(hashed_password)
-    return bool(isinstance(normalized, str) and normalized.startswith("$2"))
-    return bool(normalized and normalized.startswith("$2"))
-def needs_rehash(hashed_password: str) -> bool:
-    """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
-    return hashed_password.startswith("$2")
-    return pwd_context.hash(password)
-
+# -----------------------------------------------------------------------------
+# Password hashing
+# -----------------------------------------------------------------------------
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+def needs_rehash(hashed_password: str) -> bool:
+    """Return True if the stored hash should be rehashed with current policy."""
+    return pwd_context.needs_update(hashed_password)
+
+# -----------------------------------------------------------------------------
+# JWT helpers
+# -----------------------------------------------------------------------------
+ALGORITHM = "HS256"
+SECRET_KEY = settings.secret_key  # ensure this exists in your config/.env
+
+def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    subject: usually the user's email
+    """
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
+    to_encode = {"sub": subject, "iat": int(now.timestamp()), "exp": int(expire.timestamp())}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_access_token(token: str) -> str:
+    """
+    Returns the subject (email) if token is valid, else raises JWTError.
+    """
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    subject = payload.get("sub")
+    if not subject:
+        raise JWTError("Token missing subject")
+    return subject
