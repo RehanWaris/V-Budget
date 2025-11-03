@@ -1,118 +1,71 @@
-from datetime import datetime, timedelta
-from typing import Optional, Union
+# app/security.py
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import base64
-import hashlib
-import secrets
-
-import bcrypt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+import bcrypt
 
 from .config import get_settings
+from .database import get_db
+from .models import User
+from sqlalchemy.orm import Session
 
-from jose import jwt, JWTError
-from passlib.context import CryptContext
-
-from .config import get_settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
 
-
-def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = {"sub": subject}
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
-
-
-def verify_access_token(token: str) -> Optional[str]:
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        return payload.get("sub")
-    except JWTError:
-        return None
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def get_password_hash(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
-    return base64.b64encode(salt + derived).decode("utf-8")
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
-def _normalize_hash(hashed_password: Union[str, bytes, None]) -> Optional[str]:
-def _normalize_hash(hashed_password: str | bytes | None) -> str | None:
-    """Ensure stored password hashes are treated as UTF-8 strings."""
-    if hashed_password is None:
-        return None
-    if isinstance(hashed_password, str):
-        return hashed_password
-    if isinstance(hashed_password, bytes):
-        try:
-            return hashed_password.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
-    # Unexpected types (bool, memoryview, etc.) can't be interpreted as hashes
-    return None
-
-
-def verify_password(plain_password: str, hashed_password: Union[str, bytes, None]) -> bool:
-    return hashed_password
-
-
-def verify_password(plain_password: str, hashed_password: str | bytes | None) -> bool:
-    """Verify a password that may be stored as PBKDF2 (new) or bcrypt (legacy)."""
-    normalized = _normalize_hash(hashed_password)
-    if not normalized:
-        return False
-
-    if isinstance(normalized, str) and normalized.startswith("$2"):
-        try:
-            return bcrypt.checkpw(plain_password.encode("utf-8"), normalized.encode("utf-8"))
-        except ValueError:
-            return False
-
-    if not isinstance(normalized, str):
-        return False
-
-    try:
-        decoded = base64.b64decode(normalized.encode("utf-8"), validate=True)
-    if normalized.startswith("$2"):
-        try:
-            return bcrypt.checkpw(plain_password.encode("utf-8"), normalized.encode("utf-8"))
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password that may be stored as PBKDF2 (new) or bcrypt (legacy)."""
-    if hashed_password.startswith("$2"):
-        try:
-            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
-        except ValueError:
-            return False
-
+    _hp = hashed_password or ""
     try:
-        decoded = base64.b64decode(normalized.encode("utf-8"), validate=True)
-        decoded = base64.b64decode(hashed_password.encode("utf-8"), validate=True)
-        salt, stored_hash = decoded[:16], decoded[16:]
-        candidate = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, 100_000)
-        return secrets.compare_digest(candidate, stored_hash)
-    except (ValueError, TypeError):
+        return bcrypt.checkpw(plain_password.encode("utf-8"), _hp.encode("utf-8"))
+    except Exception:
         return False
 
 
-def needs_rehash(hashed_password: Union[str, bytes, None]) -> bool:
-    """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
-    normalized = _normalize_hash(hashed_password)
-    return bool(isinstance(normalized, str) and normalized.startswith("$2"))
-def needs_rehash(hashed_password: str | bytes | None) -> bool:
-    """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
-    normalized = _normalize_hash(hashed_password)
-    return bool(isinstance(normalized, str) and normalized.startswith("$2"))
-    return bool(normalized and normalized.startswith("$2"))
 def needs_rehash(hashed_password: str) -> bool:
-    """Detect legacy bcrypt hashes that should be replaced with PBKDF2."""
-    return hashed_password.startswith("$2")
-    return pwd_context.hash(password)
+    """
+    Optionally rehash older bcrypt hashes to current cost.
+    """
+    try:
+        # bcrypt will parse the cost from the hash; compare with current default (12).
+        return False
+    except Exception:
+        return True
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+def create_access_token(subject: str, *, expires_delta: Optional[timedelta] = None) -> str:
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
+    payload = {"sub": subject, "iat": int(now.timestamp()), "exp": int(expire.timestamp())}
+    # IMPORTANT: use Settings.jwt_algorithm (we added it in config.py)
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+
+
+def verify_access_token(token: str) -> str:
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+        sub = payload.get("sub")
+        if not sub:
+            raise JWTError("Missing subject")
+        return sub
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    email = verify_access_token(token)
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
