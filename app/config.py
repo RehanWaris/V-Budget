@@ -1,32 +1,28 @@
-import os
+# app/config.py
 from functools import lru_cache
-
-from pydantic import BaseModel
-
-
-def _env_flag(name: str, default: bool) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-from functools import lru_cache
-from pydantic import BaseModel
-import os
+from pydantic_settings import BaseSettings
 
 
-class Settings(BaseModel):
+class Settings(BaseSettings):
     app_name: str = "V-Budget"
-    secret_key: str = os.getenv("VBUDGET_SECRET_KEY", "super-secret-key-change-me")
-    access_token_expire_minutes: int = 60 * 12
-    algorithm: str = "HS256"
-    database_url: str = os.getenv("VBUDGET_DATABASE_URL", "sqlite:///./vbudget.db")
-    uploads_dir: str = os.getenv("VBUDGET_UPLOADS_DIR", "./uploads")
-    admin_email: str = os.getenv("VBUDGET_ADMIN_EMAIL", "rehan@voiceworx.in")
-    debug_mode: bool = _env_flag("VBUDGET_DEBUG_MODE", True)
+    debug_mode: bool = True
+
+    # DB (SQLite by default; you can override with env)
+    database_url: str = "sqlite:///./dev.db"
+
+    # Auth/JWT
+    secret_key: str = "replace-this-with-a-long-random-string"
+    jwt_algorithm: str = "HS256"          # <- add this (name exactly as used below)
+    access_token_expire_minutes: int = 60
+
+    # Admin bootstrap
+    admin_email: str = "rehan@voiceworx.in"
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
 
-@lru_cache
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    settings = Settings()
-    os.makedirs(settings.uploads_dir, exist_ok=True)
-    return settings
+    return Settings()
